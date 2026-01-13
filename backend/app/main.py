@@ -24,6 +24,11 @@ import os
 # Configure logging
 logger = logging.getLogger("uvicorn")
 
+# Global resources for heavy image operations
+MAX_CONCURRENT_IMAGE_OPS = 2
+image_processing_semaphore = asyncio.Semaphore(MAX_CONCURRENT_IMAGE_OPS)
+thread_pool = ThreadPoolExecutor(max_workers=4)
+
 app = FastAPI()
 
 # Absolute Path Setup for Static Files (Fix for Render)
