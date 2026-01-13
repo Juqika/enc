@@ -197,9 +197,9 @@ async def encrypt_image(
             payload = dim_header + pixel_data
             
             # Compress payload to reduce ciphertext length using Zstandard (Zstd)
-            # Level 15 provides a strong balance of high compression ratio and speed.
-            logger.info("🗜️ Compressing payload with Zstandard (Level 15)...")
-            cctx = zstd.ZstdCompressor(level=15)
+            # Level 3 is standard/fast. Level 15 is too heavy for free tier servers.
+            logger.info("🗜️ Compressing payload with Zstandard (Level 3)...")
+            cctx = zstd.ZstdCompressor(level=3)
             compressed_payload = cctx.compress(payload)
             logger.info(f"✅ Compression: {len(payload)} -> {len(compressed_payload)} bytes")
             
