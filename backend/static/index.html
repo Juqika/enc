@@ -372,7 +372,15 @@
                             </div>
 
                             <div class="mb-3" v-if="decryptSource === 'text'">
-                                <textarea v-model="ciphertextInput" class="form-control font-mono small" rows="5" placeholder="Paste ciphertext string here..."></textarea>
+                                <div class="mb-2">
+                                    <label class="form-label small text-muted">Option A: Upload .txt File (Recommended for large data)</label>
+                                    <input type="file" @change="onTextFileChange" class="form-control form-control-sm" accept=".txt">
+                                </div>
+                                <div class="text-center small text-muted my-2">- OR -</div>
+                                <div class="mb-2">
+                                    <label class="form-label small text-muted">Option B: Paste String</label>
+                                    <textarea v-model="ciphertextInput" class="form-control font-mono small" rows="5" placeholder="Paste ciphertext string here..."></textarea>
+                                </div>
                             </div>
 
                             <div class="mb-4">
@@ -745,6 +753,17 @@
                     }
                 };
 
+                const onTextFileChange = (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            ciphertextInput.value = e.target.result;
+                        };
+                        reader.readAsText(file);
+                    }
+                };
+
                 const encryptImage = async () => {
                     if (!imageFile.value || !result.value) return;
                     imageLoading.value = true;
@@ -789,10 +808,25 @@
                         }
 
                         const res = await axios.post(endpoint, formData, { responseType: 'blob' });
-                        if (res.data.type === 'application/json') throw new Error("Server error");
+                        if (res.data.type === 'application/json') {
+                            // Blob is actually a JSON error
+                            const text = await res.data.text();
+                            const json = JSON.parse(text);
+                            throw new Error(json.detail || "Server error");
+                        }
                         decryptedImagePreview.value = URL.createObjectURL(res.data);
                     } catch (e) {
-                        alert("Decryption Error. Check key or file.");
+                        let msg = "Decryption Failed.";
+                        if (e.response && e.response.data instanceof Blob) {
+                             // Parse blob error
+                             const text = await e.response.data.text();
+                             try { msg = JSON.parse(text).detail; } catch (err) {}
+                        } else if (e.response && e.response.data) {
+                             msg = e.response.data.detail || msg;
+                        } else {
+                             msg = e.message;
+                        }
+                        alert("❌ Error: " + msg);
                     } finally {
                         imageLoading.value = false;
                     }
@@ -847,7 +881,7 @@
                     imageFile, onImageFileChange, originalImagePreview, encryptedImagePreview, decryptedImagePreview,
                     imageKey, imageLoading, encryptImage, decryptImage, imageResult, histChannel, imageMode,
                     getHistData, encryptedText, decryptSource, ciphertextInput, downloadCiphertext, compactMode,
-                    showMiniSbox, showMiniSboxText, showMainSbox, canDecrypt, useCompression
+                    showMiniSbox, showMiniSboxText, showMainSbox, canDecrypt, useCompression, onTextFileChange
                 };
             }
         }).mount('#app');
