@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced AES S-Box Analyzer</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- Axios -->
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #475569;
+            --bg-color: #f8fafc;
+            --card-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+
+        body {
+            background-color: var(--bg-color);
+            font-family: 'Inter', sans-serif;
+            color: #1e293b;
+        }
+
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* S-Box Grid Styles */
+        .sbox-grid {
+            display: grid;
+            grid-template-columns: repeat(16, 1fr);
+            gap: 1px;
+            background: #e2e8f0;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .sbox-cell {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: #1e293b;
+            position: relative;
+            cursor: default;
+            transition: all 0.1s;
+        }
+
+        .sbox-cell:hover {
+            transform: scale(1.2);
+            z-index: 10;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+            border: 1px solid #2563eb;
+        }
+
+        /* Matrix Input */
+        .matrix-input {
+            width: 32px;
+            height: 32px;
+            text-align: center;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            transition: border-color 0.2s;
+        }
+        
+        .matrix-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            background-color: #eff6ff;
+        }
+
+        /* Custom Cards */
+        .custom-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            box-shadow: var(--card-shadow);
+            overflow: hidden;
+        }
+
+        .custom-card-header {
+            padding: 1rem;
+            border-bottom: 1px solid #e2e8f0;
+            background: #ffffff;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .nav-pills .nav-link {
+            color: var(--secondary-color);
+            font-weight: 500;
+            border-radius: 0.5rem;
+            padding: 0.5rem 1rem;
+            transition: all 0.2s;
+        }
+
+        .nav-pills .nav-link.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+
+        .image-preview-container {
+            background-image: 
+                linear-gradient(45deg, #f0f0f0 25%, transparent 25%), 
+                linear-gradient(-45deg, #f0f0f0 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #f0f0f0 75%), 
+                linear-gradient(-45deg, transparent 75%, #f0f0f0 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            min-height: 250px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.5rem;
+            border: 2px dashed #cbd5e1;
+        }
+        
+        /* Loading Overlay */
+        .loading-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            backdrop-filter: blur(2px);
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+    <div id="app" class="container py-4">
+        <!-- Header -->
+        <header class="mb-5">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <h1 class="h3 fw-bold mb-1 text-primary">AES S-Box Studio</h1>
+                    <p class="text-muted small mb-0">Analysis, Modification & Visual Encryption Tool</p>
+                </div>
+                <div class="col-md-6">
+                    <ul class="nav nav-pills justify-content-end bg-white p-1 rounded-3 shadow-sm d-inline-flex float-end">
+                        <li class="nav-item">
+                            <a class="nav-link" :class="{active: currentTab === 'analysis'}" href="#" @click.prevent="currentTab = 'analysis'">
+                                <span class="me-1">📊</span> Analysis
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" :class="{active: currentTab === 'encryption'}" href="#" @click.prevent="currentTab = 'encryption'">
+                                <span class="me-1">🔐</span> Text
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" :class="{active: currentTab === 'image'}" href="#" @click.prevent="currentTab = 'image'">
+                                <span class="me-1">🖼️</span> Image
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </header>
+
+        <!-- STATUS BAR -->
+        <div v-if="result" class="alert mb-4 d-flex align-items-center justify-content-between shadow-sm" 
+             :class="result.is_bijective ? 'alert-success border-success' : 'alert-danger border-danger'">
+            <div class="d-flex align-items-center">
+                <span class="fs-4 me-2">{{ result.is_bijective ? '✅' : '❌' }}</span>
+                <div>
+                    <strong>Current S-Box Status: {{ result.is_bijective ? 'Valid (Bijective)' : 'Invalid' }}</strong>
+                    <div class="small opacity-75">Ready for encryption tasks</div>
+                </div>
+            </div>
+            <div class="text-end small font-mono">
+                <div v-if="result.is_bijective">NL: {{ formatNumber(result.metrics.NL) }} | SAC: {{ formatNumber(result.metrics.SAC) }}</div>
+                <div v-else>Non-invertible Affine Matrix</div>
+            </div>
+        </div>
+
+        <!-- TAB: ANALYSIS -->
+        <div v-show="currentTab === 'analysis'" class="row g-4 fade-in">
+            <!-- Controls -->
+            <div class="col-lg-5">
+                <div class="custom-card h-100">
+                    <div class="custom-card-header">
+                        <span>Generator Configuration</span>
+                        <button @click="generateRandom" class="btn btn-sm btn-outline-primary fw-bold">
+                            🎲 Randomize
+                        </button>
+                    </div>
+                    <div class="p-4">
+                        <div class="mb-4">
+                            <label class="form-label fw-bold text-secondary text-uppercase small">Preset Library</label>
+                            <select class="form-select border-secondary-subtle" v-model="selectedPreset" @change="loadPreset">
+                                <option value="custom">✨ Custom / Random</option>
+                                <option disabled>──────────</option>
+                                <option value="aes">🛡️ Standard AES</option>
+                                <option value="paper2_k44">⭐ S-Box 44 (Optimized)</option>
+                                <option value="paper2_k81">S-Box 81</option>
+                                <option value="paper2_k111">S-Box 111</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-4">
+                            <div class="d-flex justify-content-between mb-2">
+                                <label class="form-label fw-bold text-secondary text-uppercase small mb-0">Affine Matrix (8x8)</label>
+                                <span class="badge bg-light text-dark border">GF(2)</span>
+                            </div>
+                            <div class="d-flex justify-content-center bg-light p-3 rounded border">
+                                <div>
+                                    <div v-for="(row, rIndex) in affineMatrix" :key="'r'+rIndex" class="d-flex gap-1 mb-1">
+                                        <input v-for="(val, cIndex) in row" :key="'c'+cIndex" 
+                                               type="text" 
+                                               class="matrix-input"
+                                               v-model.number="affineMatrix[rIndex][cIndex]"
+                                               @focus="$event.target.select()"
+                                               :disabled="!isCustom"
+                                               maxlength="1">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold text-secondary text-uppercase small">Constant Vector</label>
+                            <div class="d-flex gap-1 justify-content-center bg-light p-2 rounded border">
+                                <input v-for="(val, i) in constantVector" :key="'v'+i"
+                                       type="text" 
+                                       class="matrix-input bg-white"
+                                       v-model.number="constantVector[i]"
+                                       @focus="$event.target.select()"
+                                       :disabled="!isCustom"
+                                       maxlength="1">
+                            </div>
+                        </div>
+
+                        <button @click="analyzeSBox" :disabled="loading" class="btn btn-primary w-100 py-2 fw-bold shadow-sm">
+                            <span v-if="loading" class="spinner-border spinner-border-sm me-2"></span>
+                            Generate & Analyze
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Visualization -->
+            <div class="col-lg-7">
+                <div v-if="result" class="custom-card mb-4">
+                    <div class="custom-card-header">
+                        <div class="d-flex align-items-center gap-2">
+                            <button class="btn btn-sm btn-light border" @click="showMainSbox = !showMainSbox">
+                                {{ showMainSbox ? '▼' : '▶' }}
+                            </button>
+                            <span>S-Box Visualization</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                             <div class="small text-muted me-2" v-if="showMainSbox">Heatmap: 0x00 ➝ 0xFF</div>
+                             <button @click="exportExcel" class="btn btn-sm btn-light border">📥 Export Excel</button>
+                        </div>
+                    </div>
+                    <div class="p-4" v-show="showMainSbox">
+                        <div class="sbox-grid">
+                            <div v-for="(val, idx) in result.sbox" :key="idx" 
+                                 class="sbox-cell"
+                                 :style="{ backgroundColor: getHeatmapColor(val) }"
+                                 :title="`Input: 0x${idx.toString(16).toUpperCase().padStart(2,'0')}\nOutput: 0x${val.toString(16).toUpperCase().padStart(2,'0')}`">
+                                {{ val.toString(16).toUpperCase().padStart(2, '0') }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="result && result.is_bijective" class="row g-3">
+                    <div class="col-6 col-md-4" v-for="(value, key) in result.metrics" :key="key">
+                        <div class="custom-card p-3 text-center h-100 hover-lift">
+                            <div class="text-secondary small fw-bold text-uppercase mb-1">{{ key }}</div>
+                            <div class="fs-4 fw-bold text-dark font-mono">{{ formatNumber(value) }}</div>
+                            <div v-if="getComparison(key, value)" :class="['badge mt-2', getComparison(key, value).class]">
+                                {{ getComparison(key, value).text }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: IMAGE ENCRYPTION -->
+        <div v-show="currentTab === 'image'" class="row g-4">
+            <!-- Sidebar Controls -->
+            <div class="col-lg-4">
+                <div class="custom-card h-100 position-relative">
+                    <div v-if="imageLoading" class="loading-overlay rounded-3">
+                        <div class="text-center">
+                            <div class="spinner-border text-primary mb-2" role="status"></div>
+                            <div class="fw-bold text-dark">Processing...</div>
+                        </div>
+                    </div>
+
+                    <div class="custom-card-header bg-light">
+                        <div class="btn-group w-100 shadow-sm">
+                            <button @click="imageMode = 'encrypt'" :class="['btn fw-bold', imageMode === 'encrypt' ? 'btn-primary' : 'btn-white border']">Encrypt</button>
+                            <button @click="imageMode = 'decrypt'" :class="['btn fw-bold', imageMode === 'decrypt' ? 'btn-primary' : 'btn-white border']">Decrypt</button>
+                        </div>
+                    </div>
+                    
+                    <div class="p-4">
+                        <!-- Mode: Encrypt -->
+                        <div v-if="imageMode === 'encrypt'">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small text-uppercase">1. Select Image</label>
+                                <input type="file" @change="onImageFileChange" class="form-control" accept="image/*">
+                            </div>
+
+                            <div class="mb-4">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <label class="form-label fw-bold small text-uppercase mb-0">2. Secret Key</label>
+                                    <div class="form-check form-switch mb-0" title="Resizes image to max 600px to produce shareable text">
+                                        <input class="form-check-input" type="checkbox" v-model="compactMode" id="compactCheck">
+                                        <label class="form-check-label small" for="compactCheck">Compact Mode</label>
+                                    </div>
+                                </div>
+                                <input type="text" v-model="imageKey" class="form-control font-mono" placeholder="Enter encryption key">
+                            </div>
+
+                            <button @click="encryptImage" :disabled="!imageFile || !result || !result.is_bijective" class="btn btn-primary w-100 py-2 fw-bold shadow-sm">
+                                🔒 Encrypt Image
+                            </button>
+                        </div>
+
+                        <!-- Mode: Decrypt -->
+                        <div v-else>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small text-uppercase">Source</label>
+                                <div class="btn-group w-100" role="group">
+                                    <input type="radio" class="btn-check" name="decSource" id="srcFile" value="file" v-model="decryptSource">
+                                    <label class="btn btn-outline-secondary btn-sm" for="srcFile">Image File</label>
+                                    <input type="radio" class="btn-check" name="decSource" id="srcText" value="text" v-model="decryptSource">
+                                    <label class="btn btn-outline-secondary btn-sm" for="srcText">Text Code</label>
+                                </div>
+                            </div>
+
+                            <div class="mb-3" v-if="decryptSource === 'file'">
+                                <input type="file" @change="onImageFileChange" class="form-control" accept="image/png">
+                            </div>
+
+                            <div class="mb-3" v-if="decryptSource === 'text'">
+                                <textarea v-model="ciphertextInput" class="form-control font-mono small" rows="5" placeholder="Paste ciphertext string here..."></textarea>
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="form-label fw-bold small text-uppercase">Secret Key</label>
+                                <input type="text" v-model="imageKey" class="form-control font-mono" placeholder="Enter decryption key">
+                            </div>
+
+                            <button @click="decryptImage" :disabled="!canDecrypt" class="btn btn-warning text-dark w-100 py-2 fw-bold shadow-sm">
+                                🔓 Decrypt Image
+                            </button>
+                        </div>
+
+                        <!-- Active S-Box Accordion -->
+                        <div class="mt-4 border rounded overflow-hidden">
+                            <button class="btn btn-light w-100 d-flex justify-content-between align-items-center p-3" type="button" @click="showMiniSbox = !showMiniSbox">
+                                <span class="small fw-bold text-uppercase text-muted">Active S-Box Preview</span>
+                                <span>{{ showMiniSbox ? '▼' : '▶' }}</span>
+                            </button>
+                            <div v-show="showMiniSbox" class="p-2 bg-white border-top">
+                                <div v-if="result" class="sbox-grid">
+                                    <div v-for="(val, idx) in result.sbox" :key="idx" 
+                                         class="sbox-cell"
+                                         style="font-size: 0.45rem;"
+                                         :style="{ backgroundColor: getHeatmapColor(val) }"
+                                         :title="`Input: 0x${idx.toString(16).toUpperCase().padStart(2,'0')}\nOutput: 0x${val.toString(16).toUpperCase().padStart(2,'0')}`">
+                                        {{ val.toString(16).toUpperCase().padStart(2, '0') }}
+                                    </div>
+                                </div>
+                                <div v-else class="text-center small text-muted p-2">No S-Box Generated</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Results Area -->
+            <div class="col-lg-8">
+                <!-- Image Comparison -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <div class="custom-card h-100">
+                            <div class="custom-card-header py-2 small">Original / Input</div>
+                            <div class="p-2">
+                                <div class="image-preview-container">
+                                    <img v-if="originalImagePreview" :src="originalImagePreview" class="img-fluid" style="max-height: 250px;">
+                                    <span v-else class="text-muted small">No Image Selected</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="custom-card h-100 border-primary">
+                            <div class="custom-card-header py-2 small bg-primary text-white">
+                                Output Result
+                                <span v-if="imageResult" class="badge bg-white text-primary">{{ formatNumber(imageResult.analysis.npcr) }}% NPCR</span>
+                            </div>
+                            <div class="p-2">
+                                <div class="image-preview-container bg-white">
+                                    <img v-if="imageMode === 'encrypt' && encryptedImagePreview" :src="encryptedImagePreview" class="img-fluid" style="max-height: 250px;">
+                                    <img v-else-if="imageMode === 'decrypt' && decryptedImagePreview" :src="decryptedImagePreview" class="img-fluid" style="max-height: 250px;">
+                                    <div v-else-if="imageLoading" class="spinner-border text-primary"></div>
+                                    <span v-else class="text-muted small">Waiting for Process...</span>
+                                </div>
+                            </div>
+                            <div class="p-2 border-top bg-light d-flex gap-2">
+                                <a v-if="encryptedImagePreview || decryptedImagePreview" 
+                                   :href="imageMode === 'encrypt' ? encryptedImagePreview : decryptedImagePreview" 
+                                   :download="imageMode === 'encrypt' ? 'encrypted_image.png' : 'decrypted_image.png'"
+                                   class="btn btn-sm btn-success flex-fill fw-bold">
+                                    Download Image
+                                </a>
+                                <button v-if="encryptedText" @click="downloadCiphertext" class="btn btn-sm btn-dark flex-fill fw-bold">
+                                    Download Text
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Analysis Panel (Only for Encryption) -->
+                <div v-if="imageMode === 'encrypt' && imageResult" class="custom-card fade-in">
+                    <div class="custom-card-header">
+                        <span>Security Analysis</span>
+                        <div class="btn-group btn-group-sm">
+                            <button v-for="c in ['gray','red','green','blue']" 
+                                    :key="c"
+                                    class="btn"
+                                    :class="histChannel === c ? 'btn-secondary' : 'btn-outline-secondary'"
+                                    @click="histChannel = c">
+                                {{ c.charAt(0).toUpperCase() + c.slice(1) }}
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body p-4">
+                        <div class="row align-items-end" style="height: 150px;">
+                            <div class="col-6 h-100 d-flex flex-column">
+                                <div class="small text-center text-muted mb-auto">Original Histogram</div>
+                                <div class="d-flex align-items-end h-75 border-bottom">
+                                    <div v-for="(count, i) in getHistData(imageResult.analysis.original_histogram)" :key="i"
+                                         class="flex-grow-1"
+                                         :style="{height: (count / Math.max(...getHistData(imageResult.analysis.original_histogram)) * 100) + '%', background: '#94a3b8'}">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6 h-100 d-flex flex-column">
+                                <div class="small text-center text-muted mb-auto">Encrypted Histogram (Should be flat)</div>
+                                <div class="d-flex align-items-end h-75 border-bottom">
+                                    <div v-for="(count, i) in getHistData(imageResult.analysis.encrypted_histogram)" :key="i"
+                                         class="flex-grow-1"
+                                         :style="{height: (count / Math.max(...getHistData(imageResult.analysis.encrypted_histogram)) * 100) + '%', background: '#2563eb'}">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row mt-4 text-center">
+                            <div class="col-6">
+                                <div class="small text-muted text-uppercase fw-bold">Original Entropy</div>
+                                <div class="fs-5 font-mono">{{ formatNumber(imageResult.analysis.original_entropy) }}</div>
+                            </div>
+                            <div class="col-6">
+                                <div class="small text-muted text-uppercase fw-bold">Encrypted Entropy</div>
+                                <div class="fs-5 fw-bold text-primary font-mono">{{ formatNumber(imageResult.analysis.encrypted_entropy) }}</div>
+                                <div class="small text-success">Target: ~7.999</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: TEXT ENCRYPTION (Simplified) -->
+        <div v-show="currentTab === 'encryption'" class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="custom-card p-4">
+                    <h5 class="mb-4 fw-bold">Text Encryption Playground</h5>
+                    
+                    <!-- Active S-Box Accordion (Text Tab) -->
+                    <div class="mb-4 border rounded overflow-hidden">
+                        <button class="btn btn-light w-100 d-flex justify-content-between align-items-center p-3" type="button" @click="showMiniSboxText = !showMiniSboxText">
+                            <span class="small fw-bold text-uppercase text-muted">Active S-Box Preview</span>
+                            <span>{{ showMiniSboxText ? '▼' : '▶' }}</span>
+                        </button>
+                        <div v-show="showMiniSboxText" class="p-2 bg-white border-top">
+                            <div v-if="result" class="sbox-grid">
+                                <div v-for="(val, idx) in result.sbox" :key="idx" 
+                                     class="sbox-cell"
+                                     style="font-size: 0.75rem;"
+                                     :style="{ backgroundColor: getHeatmapColor(val) }"
+                                     :title="`Input: 0x${idx.toString(16).toUpperCase().padStart(2,'0')}\nOutput: 0x${val.toString(16).toUpperCase().padStart(2,'0')}`">
+                                    {{ val.toString(16).toUpperCase().padStart(2, '0') }}
+                                </div>
+                            </div>
+                            <div v-else class="text-center small text-muted p-2">No S-Box Generated</div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-uppercase">Key</label>
+                        <input type="text" v-model="encKey" class="form-control font-mono">
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="p-3 bg-light rounded border">
+                                <label class="form-label small fw-bold">Plaintext</label>
+                                <textarea v-model="plaintext" class="form-control mb-2" rows="3"></textarea>
+                                <button @click="doEncrypt" :disabled="!canEncrypt" class="btn btn-sm btn-primary w-100 fw-bold shadow-sm">🔒 Encrypt</button>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="p-3 bg-light rounded border">
+                                <label class="form-label small fw-bold">Ciphertext (Hex)</label>
+                                <textarea v-model="ciphertext" class="form-control mb-2 font-mono" rows="3"></textarea>
+                                <button @click="doDecrypt" :disabled="!canEncrypt" class="btn btn-sm btn-warning text-dark w-100 fw-bold shadow-sm">🔓 Decrypt</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const { createApp, ref, computed } = Vue;
+
+        createApp({
+            setup() {
+                const currentTab = ref('analysis');
+                
+                // Analysis State
+                const affineMatrix = ref(Array(8).fill().map(() => Array(8).fill(0)));
+                const constantVector = ref(Array(8).fill(0));
+                const selectedPoly = ref(0x11B);
+                const result = ref(null);
+                const loading = ref(false);
+                const loadingRandom = ref(false);
+                const error = ref(null);
+                const showMiniSbox = ref(true);
+                const showMiniSboxText = ref(true);
+                const showMainSbox = ref(true);
+
+                // Encryption State
+                const encKey = ref('MySecretKey123');
+                const plaintext = ref('Hello World! This is a test.');
+                const ciphertext = ref('');
+                const encLoading = ref(false);
+                const decLoading = ref(false);
+                const encError = ref(null);
+
+                // Image State
+                const imageFile = ref(null);
+                const originalImagePreview = ref(null);
+                const encryptedImagePreview = ref(null);
+                const decryptedImagePreview = ref(null);
+                const imageKey = ref('ImageKey123');
+                const imageLoading = ref(false);
+                const imageResult = ref(null);
+                const encryptedText = ref(null);
+                const histChannel = ref('gray');
+                const imageMode = ref('encrypt');
+                const decryptSource = ref('file');
+                const ciphertextInput = ref('');
+                const compactMode = ref(false);
+
+                // Presets
+                const selectedPreset = ref('custom');
+                const isCustom = computed(() => selectedPreset.value === 'custom');
+
+                const PRESETS = {
+                    aes: {
+                        matrix: [
+                            [1, 0, 0, 0, 1, 1, 1, 1], [1, 1, 0, 0, 0, 1, 1, 1],
+                            [1, 1, 1, 0, 0, 0, 1, 1], [1, 1, 1, 1, 0, 0, 0, 1],
+                            [1, 1, 1, 1, 1, 0, 0, 0], [0, 1, 1, 1, 1, 1, 0, 0],
+                            [0, 0, 1, 1, 1, 1, 1, 0], [0, 0, 0, 1, 1, 1, 1, 1]
+                        ],
+                        constant: [1, 1, 0, 0, 0, 1, 1, 0],
+                        poly: 0x11B
+                    }
+                };
+
+                const getHeatmapColor = (value) => {
+                    // Simple blue gradient heatmap
+                    const intensity = value / 255;
+                    // Interpolate between white (#ffffff) and blue (#2563eb)
+                    // Blue is rgb(37, 99, 235)
+                    const r = Math.round(255 + (37 - 255) * intensity);
+                    const g = Math.round(255 + (99 - 255) * intensity);
+                    const b = Math.round(255 + (235 - 255) * intensity);
+                    
+                    return `rgb(${r}, ${g}, ${b})`;
+                };
+
+                // Add Paper Presets from PDF
+                const fetchPaperPresets = async () => {
+                    try {
+                        const res = await axios.get('/paper-presets');
+                        PRESETS.paper2_k44 = { matrix: res.data.K44, constant: res.data.constant, poly: 0x11B };
+                        PRESETS.paper2_k81 = { matrix: res.data.K81, constant: res.data.constant, poly: 0x11B };
+                        PRESETS.paper2_k111 = { matrix: res.data.K111, constant: res.data.constant, poly: 0x11B };
+                    } catch (e) { console.error("Failed to fetch paper presets", e); }
+                };
+
+                const init = () => {
+                   for(let i=0; i<8; i++) affineMatrix.value[i][i] = 1;
+                   fetchPaperPresets();
+                };
+
+                const loadPreset = () => {
+                    if (selectedPreset.value === 'custom') return;
+                    const p = PRESETS[selectedPreset.value];
+                    if (p) {
+                        affineMatrix.value = JSON.parse(JSON.stringify(p.matrix));
+                        constantVector.value = [...p.constant];
+                        selectedPoly.value = p.poly || 0x11B;
+                    }
+                };
+
+                const generateRandom = async () => {
+                    selectedPreset.value = 'custom';
+                    loadingRandom.value = true;
+                    try {
+                        const res = await axios.get('/random-affine');
+                        affineMatrix.value = res.data.matrix;
+                        constantVector.value = res.data.constant;
+                        selectedPoly.value = 0x11B;
+                        await analyzeSBox();
+                    } catch (e) {
+                        error.value = "Failed to generate random matrix.";
+                        console.error(e);
+                    } finally {
+                        loadingRandom.value = false;
+                    }
+                };
+
+                const analyzeSBox = async () => {
+                    loading.value = true;
+                    error.value = null;
+                    result.value = null;
+                    try {
+                        const payload = {
+                            matrix: affineMatrix.value,
+                            constant: constantVector.value,
+                            poly: selectedPoly.value
+                        };
+                        const res = await axios.post('/analyze', payload);
+                        result.value = res.data;
+                    } catch (e) {
+                        error.value = "Analysis failed.";
+                        console.error(e);
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                const exportExcel = async () => {
+                    if (!result.value) return;
+                    try {
+                        const response = await axios.post('/export-excel', {
+                            sbox: result.value.sbox,
+                            metrics: result.value.metrics
+                        }, { responseType: 'blob' });
+                        const url = window.URL.createObjectURL(new Blob([response.data]));
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.setAttribute('download', 'sbox_analysis.xlsx');
+                        document.body.appendChild(link);
+                        link.click();
+                    } catch (e) {}
+                };
+
+                const canEncrypt = computed(() => {
+                    return result.value && result.value.is_bijective && encKey.value.length > 0;
+                });
+                
+                const canDecrypt = computed(() => {
+                    if (!result.value || !result.value.is_bijective) return false;
+                    if (decryptSource.value === 'file') return !!imageFile.value;
+                    return !!ciphertextInput.value;
+                });
+
+                const doEncrypt = async () => {
+                    try {
+                        const res = await axios.post('/encrypt', {
+                            plaintext: plaintext.value, key: encKey.value, sbox: result.value.sbox
+                        });
+                        ciphertext.value = res.data.ciphertext;
+                    } catch (e) {}
+                };
+
+                const doDecrypt = async () => {
+                    try {
+                        const res = await axios.post('/decrypt', {
+                            ciphertext: ciphertext.value, key: encKey.value, sbox: result.value.sbox
+                        });
+                        plaintext.value = res.data.plaintext;
+                    } catch (e) {}
+                };
+
+                const onImageFileChange = (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        imageFile.value = file;
+                        originalImagePreview.value = URL.createObjectURL(file);
+                        imageResult.value = null;
+                        encryptedText.value = null;
+                        encryptedImagePreview.value = null;
+                        decryptedImagePreview.value = null;
+                    }
+                };
+
+                const encryptImage = async () => {
+                    if (!imageFile.value || !result.value) return;
+                    imageLoading.value = true;
+                    encryptedImagePreview.value = null;
+                    try {
+                        const formData = new FormData();
+                        formData.append('file', imageFile.value);
+                        formData.append('key', imageKey.value);
+                        formData.append('sbox', JSON.stringify(result.value.sbox));
+                        formData.append('poly', selectedPoly.value);
+                        formData.append('compact', compactMode.value);
+
+                        const res = await axios.post('/encrypt-image', formData);
+                        const data = res.data;
+                        encryptedImagePreview.value = "data:image/png;base64," + data.image_data;
+                        encryptedText.value = data.ciphertext;
+                        imageResult.value = { analysis: data.analysis };
+                    } catch (e) {
+                        alert("Encryption Error: " + (e.response?.data?.detail || e.message));
+                    } finally {
+                        imageLoading.value = false;
+                    }
+                };
+
+                const decryptImage = async () => {
+                    if (!result.value) return;
+                    imageLoading.value = true;
+                    decryptedImagePreview.value = null;
+                    try {
+                        const formData = new FormData();
+                        formData.append('key', imageKey.value);
+                        formData.append('sbox', JSON.stringify(result.value.sbox));
+                        formData.append('poly', selectedPoly.value);
+
+                        let endpoint = '/decrypt-image';
+                        if (decryptSource.value === 'file') {
+                            formData.append('file', imageFile.value);
+                        } else {
+                            endpoint = '/decrypt-image-text';
+                            formData.append('ciphertext', ciphertextInput.value);
+                        }
+
+                        const res = await axios.post(endpoint, formData, { responseType: 'blob' });
+                        if (res.data.type === 'application/json') throw new Error("Server error");
+                        decryptedImagePreview.value = URL.createObjectURL(res.data);
+                    } catch (e) {
+                        alert("Decryption Error. Check key or file.");
+                    } finally {
+                        imageLoading.value = false;
+                    }
+                };
+
+                const downloadCiphertext = () => {
+                    if (!encryptedText.value) return;
+                    const blob = new Blob([encryptedText.value], { type: 'text/plain' });
+                    const url = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.setAttribute('download', 'encrypted_ciphertext.txt');
+                    document.body.appendChild(link);
+                    link.click();
+                };
+
+                const getHistData = (histObj) => {
+                    if (!histObj) return [];
+                    if (histChannel.value === 'gray') return histObj.gray || histObj.red || [];
+                    return histObj[histChannel.value] || [];
+                };
+
+                const formatNumber = (num) => {
+                    if (num === undefined || num === null) return "0";
+                    if (Number.isInteger(num)) return num;
+                    return num.toFixed(4);
+                };
+
+                const getComparison = (key, val) => {
+                    if (key === 'NL' || key === 'BIC_NL') {
+                        if (val >= 112) return { class: 'text-bg-success', text: 'Excellent' };
+                        if (val >= 100) return { class: 'text-bg-warning', text: 'Good' };
+                        return { class: 'text-bg-danger', text: 'Weak' };
+                    }
+                    if (key === 'SAC' || key === 'BIC_SAC') {
+                        const diff = Math.abs(val - 0.5);
+                        if (diff < 0.01) return { class: 'text-bg-success', text: 'Ideal' };
+                        if (diff < 0.05) return { class: 'text-bg-warning', text: 'Close' };
+                        return { class: 'text-bg-danger', text: 'Poor' };
+                    }
+                    return null;
+                };
+
+                init();
+                generateRandom();
+
+                return {
+                    currentTab, affineMatrix, constantVector, selectedPoly, result, loading, loadingRandom, error,
+                    generateRandom, analyzeSBox, exportExcel, formatNumber, getComparison, getHeatmapColor,
+                    encKey, plaintext, ciphertext, canEncrypt, doEncrypt, doDecrypt, encLoading, encError,
+                    selectedPreset, loadPreset, isCustom,
+                    imageFile, onImageFileChange, originalImagePreview, encryptedImagePreview, decryptedImagePreview,
+                    imageKey, imageLoading, encryptImage, decryptImage, imageResult, histChannel, imageMode,
+                    getHistData, encryptedText, decryptSource, ciphertextInput, downloadCiphertext, compactMode,
+                    showMiniSbox, showMiniSboxText, showMainSbox, canDecrypt
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
