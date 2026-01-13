@@ -1,9 +1,10 @@
 fastapi
 uvicorn
+python-multipart
+pydantic
 numpy
 pandas
 openpyxl
-python-multipart
 scipy
 Pillow
 zstandard

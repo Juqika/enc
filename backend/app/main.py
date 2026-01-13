@@ -1,5 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
-from fastapi.responses import StreamingResponse, Response, RedirectResponse
+from fastapi.responses import StreamingResponse, Response, RedirectResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from .sbox_math import sbox_math
@@ -75,9 +75,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/")
 def read_root():
-    # Redirect to index.html in static
-    from fastapi.responses import RedirectResponse
-    return RedirectResponse(url="/static/index.html")
+    return FileResponse("static/index.html")
 
 @app.post("/encrypt")
 def encrypt_text(req: EncryptionRequest):
