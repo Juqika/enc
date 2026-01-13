@@ -288,27 +288,47 @@ async def decrypt_image(
 ):
     async with image_processing_semaphore:
         try:
-            logger.info("🔓 Starting image decryption...")
+            logger.info(f"🔓 Starting image decryption (File: {file.filename})...")
             sbox_list = json.loads(sbox)
             aes = AES(key, sbox_list, poly)
             
-            image_bytes = await _read_upload_file_limited(file)
-            container_img = Image.open(io.BytesIO(image_bytes))
-            if container_img.mode != 'RGB':
-                container_img = container_img.convert('RGB')
-                
-            container_bytes = container_img.tobytes()
+            # Read file content
+            file_content = await _read_upload_file_limited(file)
             
-            if len(container_bytes) < 4:
-                raise HTTPException(status_code=400, detail="Invalid image format")
-                
-            data_len = int.from_bytes(container_bytes[:4], 'big')
+            encrypted_stream = None
             
-            if data_len > len(container_bytes) - 4:
-                raise HTTPException(status_code=400, detail="Corrupted data length header")
-                
-            encrypted_stream = container_bytes[4 : 4 + data_len]
+            # Detect file type based on extension or content
+            is_text_file = file.filename.lower().endswith('.txt')
             
+            if is_text_file:
+                logger.info("📄 Processing as Ciphertext Text File")
+                try:
+                    # Text file contains Base64 string
+                    b64_str = file_content.decode('utf-8').strip()
+                    encrypted_stream = base64.b64decode(b64_str)
+                except Exception as e:
+                    raise HTTPException(status_code=400, detail=f"Invalid Base64 in text file: {str(e)}")
+            else:
+                logger.info("🖼️ Processing as Container Image")
+                try:
+                    container_img = Image.open(io.BytesIO(file_content))
+                    if container_img.mode != 'RGB':
+                        container_img = container_img.convert('RGB')
+                    
+                    container_bytes = container_img.tobytes()
+                    
+                    if len(container_bytes) < 4:
+                        raise HTTPException(status_code=400, detail="Invalid image format")
+                        
+                    data_len = int.from_bytes(container_bytes[:4], 'big')
+                    if data_len > len(container_bytes) - 4:
+                        raise HTTPException(status_code=400, detail="Corrupted data length header")
+                        
+                    encrypted_stream = container_bytes[4 : 4 + data_len]
+                except Exception as e:
+                     raise HTTPException(status_code=400, detail=f"Image processing failed: {str(e)}")
+
+            # Decrypt Logic (Common)
             def _decrypt_sync(data, aes_obj):
                 return aes_obj.decrypt_bytes_cbc(data)
             
@@ -323,7 +343,6 @@ async def decrypt_image(
                 dctx = zstd.ZstdDecompressor()
                 plaintext = dctx.decompress(plaintext_compressed)
             except zstd.ZstdError:
-                # Fallback: Assume it was not compressed (Raw AES output)
                 logger.info("⚠️ Decompression failed, assuming raw data...")
                 plaintext = plaintext_compressed
                 
@@ -358,74 +377,6 @@ async def decrypt_image(
             import traceback
             error_detail = f"{str(e)}\n{traceback.format_exc()}"
             logger.error(f"❌ FATAL ERROR in decrypt_image: {error_detail}")
-            raise HTTPException(status_code=500, detail=error_detail)
-
-@app.post("/decrypt-image-text")
-async def decrypt_image_text(
-    ciphertext: str = Form(...),
-    key: str = Form(...),
-    sbox: str = Form(...),
-    poly: int = Form(0x11B)
-):
-    async with image_processing_semaphore:
-        try:
-            logger.info("🔓 Starting image decryption from TEXT...")
-            sbox_list = json.loads(sbox)
-            aes = AES(key, sbox_list, poly)
-            
-            try:
-                encrypted_bytes = base64.b64decode(ciphertext)
-            except Exception:
-                raise HTTPException(status_code=400, detail="Invalid Base64 string")
-
-            def _decrypt_sync(data, aes_obj):
-                return aes_obj.decrypt_bytes_cbc(data)
-            
-            plaintext_compressed = await asyncio.get_event_loop().run_in_executor(
-                thread_pool,
-                _decrypt_sync,
-                encrypted_bytes, aes
-            )
-            
-            # Try Decompression
-            try:
-                dctx = zstd.ZstdDecompressor()
-                plaintext = dctx.decompress(plaintext_compressed)
-            except zstd.ZstdError:
-                logger.info("⚠️ Decompression failed, assuming raw data...")
-                plaintext = plaintext_compressed
-                
-            if len(plaintext) < 8:
-                raise HTTPException(status_code=400, detail="Invalid decrypted data structure")
-                
-            width = int.from_bytes(plaintext[:4], 'big')
-            height = int.from_bytes(plaintext[4:8], 'big')
-            pixel_data = plaintext[8:]
-            
-            expected_bytes = width * height * 3
-            if len(pixel_data) < expected_bytes:
-                 raise HTTPException(status_code=400, detail=f"Pixel data mismatch. Expected {expected_bytes}, got {len(pixel_data)}")
-
-            dec_img = Image.frombytes('RGB', (width, height), pixel_data[:expected_bytes])
-            
-            output = io.BytesIO()
-            dec_img.save(output, format="PNG")
-            output.seek(0)
-            
-            return Response(
-                content=output.getvalue(),
-                media_type="image/png",
-                headers={
-                    "Content-Disposition": 'attachment; filename="decrypted_image_from_text.png"'
-                }
-            )
-
-        except HTTPException:
-            raise
-        except Exception as e:
-            import traceback
-            error_detail = f"{str(e)}\n{traceback.format_exc()}"
-            logger.error(f"❌ FATAL ERROR in decrypt_image_text: {error_detail}")
             raise HTTPException(status_code=500, detail=error_detail)
 
 @app.get("/random-affine")

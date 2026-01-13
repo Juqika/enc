@@ -605,6 +605,7 @@
                 const ciphertextInput = ref('');
                 const compactMode = ref(false);
                 const useCompression = ref(true);
+                const textFile = ref(null);
 
                 // Presets
                 const selectedPreset = ref('custom');
@@ -720,7 +721,7 @@
                 const canDecrypt = computed(() => {
                     if (!result.value || !result.value.is_bijective) return false;
                     if (decryptSource.value === 'file') return !!imageFile.value;
-                    return !!ciphertextInput.value;
+                    return !!ciphertextInput.value || !!textFile.value;
                 });
 
                 const doEncrypt = async () => {
@@ -756,11 +757,17 @@
                 const onTextFileChange = (e) => {
                     const file = e.target.files[0];
                     if (file) {
-                        const reader = new FileReader();
-                        reader.onload = (e) => {
-                            ciphertextInput.value = e.target.result;
-                        };
-                        reader.readAsText(file);
+                        textFile.value = file; // Store raw file for upload
+                        // Optional: Read for preview (careful with large files)
+                        if (file.size < 1024 * 1024) { // Only preview if < 1MB
+                            const reader = new FileReader();
+                            reader.onload = (e) => {
+                                ciphertextInput.value = e.target.result;
+                            };
+                            reader.readAsText(file);
+                        } else {
+                            ciphertextInput.value = "[File too large to preview, but ready for upload]";
+                        }
                     }
                 };
 
@@ -799,17 +806,29 @@
                         formData.append('sbox', JSON.stringify(result.value.sbox));
                         formData.append('poly', selectedPoly.value);
 
-                        let endpoint = '/decrypt-image';
+                        let fileToUpload = null;
+
                         if (decryptSource.value === 'file') {
-                            formData.append('file', imageFile.value);
+                            if (!imageFile.value) throw new Error("Please upload an image file.");
+                            fileToUpload = imageFile.value;
                         } else {
-                            endpoint = '/decrypt-image-text';
-                            formData.append('ciphertext', ciphertextInput.value);
+                            // Text Source
+                            if (textFile.value) {
+                                fileToUpload = textFile.value;
+                            } else if (ciphertextInput.value) {
+                                // Convert textarea content to Blob/File to bypass 1MB form field limit
+                                fileToUpload = new File([ciphertextInput.value], "ciphertext.txt", { type: "text/plain" });
+                            } else {
+                                throw new Error("Please provide ciphertext (File or Paste).");
+                            }
                         }
 
-                        const res = await axios.post(endpoint, formData, { responseType: 'blob' });
+                        formData.append('file', fileToUpload);
+
+                        // Use the unified endpoint
+                        const res = await axios.post('/decrypt-image', formData, { responseType: 'blob' });
+                        
                         if (res.data.type === 'application/json') {
-                            // Blob is actually a JSON error
                             const text = await res.data.text();
                             const json = JSON.parse(text);
                             throw new Error(json.detail || "Server error");
@@ -818,7 +837,6 @@
                     } catch (e) {
                         let msg = "Decryption Failed.";
                         if (e.response && e.response.data instanceof Blob) {
-                             // Parse blob error
                              const text = await e.response.data.text();
                              try { msg = JSON.parse(text).detail; } catch (err) {}
                         } else if (e.response && e.response.data) {
