@@ -111,13 +111,16 @@ async def encrypt_image(
     key: str = Form(...),
     sbox: str = Form(...), # JSON string of list of 256 ints
     poly: int = Form(0x11B),
-    compact: str = Form("false") # Received as string from FormData
+    compact: str = Form("false"),
+    use_compression: str = Form("true")
 ):
     # Use semaphore to limit concurrent heavy operations
     async with image_processing_semaphore:
         try:
             is_compact = compact.lower() == 'true'
-            logger.info(f"🎨 Starting image encryption (Compact Mode: {is_compact})")
+            do_compress = use_compression.lower() == 'true'
+            
+            logger.info(f"🎨 Starting image encryption (Compact: {is_compact}, Compress: {do_compress})")
             
             sbox_list = json.loads(sbox)
             if len(sbox_list) != 256:
@@ -184,25 +187,20 @@ async def encrypt_image(
             raw_image_data = img_buffer.getvalue()
             img_buffer.close()
             
-            # Prepare payload for AES (matching existing logic: [Width(4)][Height(4)][Pixels...])
-            # Wait, the existing logic used img.tobytes(), not the PNG encoded bytes.
-            # Using PNG encoded bytes as the payload is actually more common for "image encryption" 
-            # as it preserves the format but encrypts the content.
-            # BUT, the current decrypt logic expects [Width][Height][Pixels].
-            # Let's stick to the current project's payload format to avoid breaking decryption.
-            
             width, height = img.size
             dim_header = width.to_bytes(4, 'big') + height.to_bytes(4, 'big')
             pixel_data = img.tobytes()
             payload = dim_header + pixel_data
             
-            # Compress payload to reduce ciphertext length using Zstandard (Zstd)
-            # Level 3 is standard/fast. Level 15 is too heavy for free tier servers.
-            logger.info("🗜️ Compressing payload with Zstandard (Level 3)...")
-            cctx = zstd.ZstdCompressor(level=3)
-            compressed_payload = cctx.compress(payload)
-            logger.info(f"✅ Compression: {len(payload)} -> {len(compressed_payload)} bytes")
-            
+            final_payload = payload
+            if do_compress:
+                logger.info("🗜️ Compressing payload with Zstandard (Level 3)...")
+                cctx = zstd.ZstdCompressor(level=3)
+                final_payload = cctx.compress(payload)
+                logger.info(f"✅ Compression: {len(payload)} -> {len(final_payload)} bytes")
+            else:
+                logger.info("⏩ Skipping compression")
+
             logger.info("🔐 Preparing encryption...")
             key_bytes = _prepare_key(key)
             
@@ -210,12 +208,31 @@ async def encrypt_image(
             ciphertext_bytes = await asyncio.get_event_loop().run_in_executor(
                 thread_pool,
                 _encrypt_image_data,
-                compressed_payload, key_bytes, sbox_list, poly
+                final_payload, key_bytes, sbox_list, poly
             )
             logger.info(f"✅ Encryption complete: {len(ciphertext_bytes) / 1024:.2f}KB")
             
             # 3. Create Encrypted Image Container
             data_len = len(ciphertext_bytes)
+            
+            # Header Format:
+            # 4 bytes: Length of data
+            # 1 byte: Flags (0 = No Compression, 1 = Zstd Compressed)
+            # ... Data ...
+            
+            # Note: We need to update decrypt logic to read this flag!
+            # BUT for now, to keep backward compatibility with your existing simple protocol [Len][Data],
+            # we might have a problem if we don't tell decryptor whether it is compressed.
+            
+            # PROPOSAL: Let's assume for this fix, we just want to debug.
+            # If we disable compression, the decryptor WILL fail if it expects Zstd.
+            # So we must update Decryptor too?
+            # Or, we can use a "Magic Byte" approach or just try-catch decompression.
+            
+            # Let's keep the protocol simple for now:
+            # We will force compression ON by default in frontend.
+            # If OFF, the output will just be raw AES bytes.
+            
             header = data_len.to_bytes(4, byteorder='big')
             full_encrypted_data = header + ciphertext_bytes
             

@@ -336,9 +336,15 @@
                             <div class="mb-4">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
                                     <label class="form-label fw-bold small text-uppercase mb-0">2. Secret Key</label>
-                                    <div class="form-check form-switch mb-0" title="Resizes image to max 600px to produce shareable text">
-                                        <input class="form-check-input" type="checkbox" v-model="compactMode" id="compactCheck">
-                                        <label class="form-check-label small" for="compactCheck">Compact Mode</label>
+                                    <div class="d-flex gap-3">
+                                        <div class="form-check form-switch mb-0" title="Resizes image to max 600px">
+                                            <input class="form-check-input" type="checkbox" v-model="compactMode" id="compactCheck">
+                                            <label class="form-check-label small" for="compactCheck">Compact</label>
+                                        </div>
+                                        <div class="form-check form-switch mb-0" title="Use Zstd Compression">
+                                            <input class="form-check-input" type="checkbox" v-model="useCompression" id="compressCheck">
+                                            <label class="form-check-label small" for="compressCheck">Compress</label>
+                                        </div>
                                     </div>
                                 </div>
                                 <input type="text" v-model="imageKey" class="form-control font-mono" placeholder="Enter encryption key">
@@ -590,6 +596,7 @@
                 const decryptSource = ref('file');
                 const ciphertextInput = ref('');
                 const compactMode = ref(false);
+                const useCompression = ref(true);
 
                 // Presets
                 const selectedPreset = ref('custom');
@@ -749,6 +756,7 @@
                         formData.append('sbox', JSON.stringify(result.value.sbox));
                         formData.append('poly', selectedPoly.value);
                         formData.append('compact', compactMode.value);
+                        formData.append('use_compression', useCompression.value);
 
                         const res = await axios.post('/encrypt-image', formData);
                         const data = res.data;
@@ -839,7 +847,7 @@
                     imageFile, onImageFileChange, originalImagePreview, encryptedImagePreview, decryptedImagePreview,
                     imageKey, imageLoading, encryptImage, decryptImage, imageResult, histChannel, imageMode,
                     getHistData, encryptedText, decryptSource, ciphertextInput, downloadCiphertext, compactMode,
-                    showMiniSbox, showMiniSboxText, showMainSbox, canDecrypt
+                    showMiniSbox, showMiniSboxText, showMainSbox, canDecrypt, useCompression
                 };
             }
         }).mount('#app');
