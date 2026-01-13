@@ -25,57 +25,16 @@ logger = logging.getLogger("uvicorn")
 
 app = FastAPI()
 
-# Global resources for heavy image operations
-MAX_CONCURRENT_IMAGE_OPS = 2
-image_processing_semaphore = asyncio.Semaphore(MAX_CONCURRENT_IMAGE_OPS)
-thread_pool = ThreadPoolExecutor(max_workers=4)
+# Absolute Path Setup for Static Files (Fix for Render)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+STATIC_DIR = os.path.join(BASE_DIR, "static")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["X-Analysis", "Content-Disposition", "X-Sbox-Type", "X-Encryption-Time", "X-Histogram-Data"]
-)
-
-# --- Helper Functions for Image Processing (from contoh.txt) ---
-
-async def _read_upload_file_limited(file: UploadFile, limit_mb: int = 100):
-    contents = await file.read()
-    if len(contents) > limit_mb * 1024 * 1024:
-        raise HTTPException(status_code=413, detail=f"File too large. Maximum size is {limit_mb}MB.")
-    return contents
-
-def _process_image_histogram(img_array):
-    return sbox_math.get_histogram(img_array)
-
-def _prepare_key(key_str):
-    key_bytes = key_str.encode('utf-8')
-    if len(key_bytes) < 16:
-        key_bytes = key_bytes + b'\0' * (16 - len(key_bytes))
-    return key_bytes[:16]
-
-def _encrypt_image_data(image_data, key_bytes, sbox_list, poly=0x11B):
-    aes = AES(key_bytes.decode('utf-8', errors='ignore'), sbox_list, poly)
-    return aes.encrypt_bytes_cbc(image_data)
-
-def analyze_image_encryption(orig_arr, enc_arr):
-    entropy_orig = sbox_math.calculate_entropy(orig_arr)
-    entropy_enc = sbox_math.calculate_entropy(enc_arr)
-    npcr = sbox_math.calculate_npcr(orig_arr, enc_arr)
-    return {
-        "original_entropy": entropy_orig,
-        "encrypted_entropy": entropy_enc,
-        "npcr": npcr
-    }
-
-# Serve static files for frontend (Vue.js via CDN)
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# Mount static directory
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 @app.get("/")
 def read_root():
-    return FileResponse("static/index.html")
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 @app.post("/encrypt")
 def encrypt_text(req: EncryptionRequest):
