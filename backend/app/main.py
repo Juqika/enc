@@ -19,6 +19,7 @@ import logging
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import gc
+import os
 
 # Configure logging
 logger = logging.getLogger("uvicorn")
