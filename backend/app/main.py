@@ -115,8 +115,16 @@ def get_paper_presets():
 
 @app.post("/analyze", response_model=AnalysisResult)
 def analyze_sbox(input_data: AffineMatrixInput):
-    sbox_math.set_irreducible_poly(input_data.poly)
-    sbox = sbox_math.generate_sbox(input_data.matrix, input_data.constant)
+    sbox = []
+    if input_data.sbox:
+        if len(input_data.sbox) != 256:
+            raise HTTPException(status_code=400, detail="Imported S-Box must contain exactly 256 integers.")
+        sbox = input_data.sbox
+    elif input_data.matrix and input_data.constant:
+        sbox_math.set_irreducible_poly(input_data.poly)
+        sbox = sbox_math.generate_sbox(input_data.matrix, input_data.constant)
+    else:
+        raise HTTPException(status_code=400, detail="Invalid input: Provide either an S-Box OR an Affine Matrix + Constant.")
     
     is_bijective = sbox_math.check_bijective(sbox)
     is_balanced = sbox_math.check_balance_bits(sbox)

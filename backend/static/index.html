@@ -216,6 +216,7 @@
                             <label class="form-label fw-bold text-secondary text-uppercase small">Preset Library</label>
                             <select class="form-select border-secondary-subtle" v-model="selectedPreset" @change="loadPreset">
                                 <option value="custom">✨ Custom / Random</option>
+                                <option value="import">📥 Import S-Box</option>
                                 <option disabled>──────────</option>
                                 <option value="aes">🛡️ Standard AES</option>
                                 <option value="paper2_k44">⭐ S-Box 44 (Optimized)</option>
@@ -224,7 +225,13 @@
                             </select>
                         </div>
 
-                        <div class="mb-4">
+                        <div v-if="selectedPreset === 'import'" class="mb-4">
+                            <label class="form-label fw-bold text-secondary text-uppercase small">Paste S-Box (JSON Array or Hex)</label>
+                            <textarea class="form-control font-mono small" v-model="importSBoxStr" rows="10" placeholder="[99, 124, 119, 123, ...] or 637C777B..."></textarea>
+                            <div class="form-text">Must be exactly 256 values (0-255).</div>
+                        </div>
+
+                        <div v-else class="mb-4">
                             <div class="d-flex justify-content-between mb-2">
                                 <label class="form-label fw-bold text-secondary text-uppercase small mb-0">Affine Matrix (8x8)</label>
                                 <span class="badge bg-light text-dark border">GF(2)</span>
@@ -244,7 +251,7 @@
                             </div>
                         </div>
 
-                        <div class="mb-4">
+                        <div class="mb-4" v-if="selectedPreset !== 'import'">
                             <label class="form-label fw-bold text-secondary text-uppercase small">Constant Vector</label>
                             <div class="d-flex gap-1 justify-content-center bg-light p-2 rounded border">
                                 <input v-for="(val, i) in constantVector" :key="'v'+i"
@@ -620,6 +627,7 @@
                 const showMiniSbox = ref(true);
                 const showMiniSboxText = ref(true);
                 const showMainSbox = ref(true);
+                const importSBoxStr = ref('');
 
                 // Encryption State
                 const encKey = ref('MySecretKey123');
@@ -691,7 +699,7 @@
                 };
 
                 const loadPreset = () => {
-                    if (selectedPreset.value === 'custom') return;
+                    if (selectedPreset.value === 'custom' || selectedPreset.value === 'import') return;
                     const p = PRESETS[selectedPreset.value];
                     if (p) {
                         affineMatrix.value = JSON.parse(JSON.stringify(p.matrix));
@@ -722,15 +730,36 @@
                     error.value = null;
                     result.value = null;
                     try {
-                        const payload = {
-                            matrix: affineMatrix.value,
-                            constant: constantVector.value,
-                            poly: selectedPoly.value
-                        };
+                        let payload = {};
+                        if (selectedPreset.value === 'import') {
+                            let sboxData = [];
+                            const raw = importSBoxStr.value.trim();
+                            if (raw.startsWith('[') || raw.includes(',')) {
+                                try {
+                                    sboxData = JSON.parse(raw);
+                                } catch(e) {
+                                     sboxData = raw.split(/[,\s]+/).map(x => parseInt(x));
+                                }
+                            } else {
+                                const hex = raw.replace(/0x|\s/g, '');
+                                for (let i = 0; i < hex.length; i += 2) {
+                                    sboxData.push(parseInt(hex.substr(i, 2), 16));
+                                }
+                            }
+                            sboxData = sboxData.filter(n => !isNaN(n));
+                            if (sboxData.length !== 256) throw new Error(`Invalid S-Box length: ${sboxData.length}. Must be 256.`);
+                            payload = { sbox: sboxData };
+                        } else {
+                            payload = {
+                                matrix: affineMatrix.value,
+                                constant: constantVector.value,
+                                poly: selectedPoly.value
+                            };
+                        }
                         const res = await axios.post('/analyze', payload);
                         result.value = res.data;
                     } catch (e) {
-                        error.value = "Analysis failed.";
+                        error.value = e.message || "Analysis failed.";
                         console.error(e);
                     } finally {
                         loading.value = false;
@@ -909,7 +938,7 @@
                 const formatNumber = (num) => {
                     if (num === undefined || num === null) return "0";
                     if (Number.isInteger(num)) return num;
-                    return num.toFixed(4);
+                    return num.toFixed(6);
                 };
 
                 const getComparison = (key, val) => {
@@ -934,7 +963,7 @@
                     currentTab, affineMatrix, constantVector, selectedPoly, result, loading, loadingRandom, error,
                     generateRandom, analyzeSBox, exportExcel, formatNumber, getComparison, getHeatmapColor,
                     encKey, plaintext, ciphertext, canEncrypt, doEncrypt, doDecrypt, encLoading, encError,
-                    selectedPreset, loadPreset, isCustom,
+                    selectedPreset, loadPreset, isCustom, importSBoxStr,
                     imageFile, onImageFileChange, originalImagePreview, encryptedImagePreview, decryptedImagePreview,
                     imageKey, imageLoading, encryptImage, decryptImage, imageResult, histChannel, imageMode,
                     getHistData, encryptedText, decryptSource, ciphertextInput, downloadCiphertext, compactMode,
