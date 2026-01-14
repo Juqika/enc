@@ -305,6 +305,15 @@ async def decrypt_image(
                 try:
                     # Text file contains Base64 string
                     b64_str = file_content.decode('utf-8').strip()
+                    
+                    # Remove Data URI header if present (e.g. data:text/plain;base64,...)
+                    if "," in b64_str and (b64_str.startswith("data:") or "base64" in b64_str[:30]):
+                        logger.info("🧹 Removing Data URI header...")
+                        b64_str = b64_str.split(",", 1)[1]
+                    
+                    # Clean whitespaces/newlines
+                    b64_str = "".join(b64_str.split())
+                    
                     encrypted_stream = base64.b64decode(b64_str)
                 except Exception as e:
                     raise HTTPException(status_code=400, detail=f"Invalid Base64 in text file: {str(e)}")
