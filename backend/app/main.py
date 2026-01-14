@@ -69,10 +69,17 @@ def analyze_image_encryption(orig_arr, enc_arr):
     entropy_orig = sbox_math.calculate_entropy(orig_arr)
     entropy_enc = sbox_math.calculate_entropy(enc_arr)
     npcr = sbox_math.calculate_npcr(orig_arr, enc_arr)
+    uaci = sbox_math.calculate_uaci(orig_arr, enc_arr)
+    corr_orig = sbox_math.calculate_correlation(orig_arr)
+    corr_enc = sbox_math.calculate_correlation(enc_arr)
+    
     return {
         "original_entropy": entropy_orig,
         "encrypted_entropy": entropy_enc,
-        "npcr": npcr
+        "npcr": npcr,
+        "uaci": uaci,
+        "corr_orig": corr_orig,
+        "corr_enc": corr_enc
     }
 
 # Mount static directory
@@ -258,6 +265,9 @@ async def encrypt_image(
                 "original_entropy": security_metrics["original_entropy"],
                 "encrypted_entropy": security_metrics["encrypted_entropy"],
                 "npcr": security_metrics["npcr"],
+                "uaci": security_metrics["uaci"],
+                "corr_orig": security_metrics["corr_orig"],
+                "corr_enc": security_metrics["corr_enc"],
                 "original_histogram": original_histogram,
                 "encrypted_histogram": encrypted_histogram
             }

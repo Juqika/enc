@@ -442,7 +442,7 @@
                         <div class="custom-card h-100 border-primary">
                             <div class="custom-card-header py-2 small bg-primary text-white">
                                 Output Result
-                                <span v-if="imageResult" class="badge bg-white text-primary">{{ formatNumber(imageResult.analysis.npcr) }}% NPCR</span>
+                                <span v-if="imageResult" class="badge bg-white text-primary">{{ formatNumber(imageResult.analysis.npcr) }}% NPCR | {{ formatNumber(imageResult.analysis.uaci) }}% UACI</span>
                             </div>
                             <div class="p-2">
                                 <div class="image-preview-container bg-white">
@@ -502,7 +502,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="row mt-4 text-center">
+                        <div class="row mt-4 text-center border-bottom pb-3">
                             <div class="col-6">
                                 <div class="small text-muted text-uppercase fw-bold">Original Entropy</div>
                                 <div class="fs-5 font-mono">{{ formatNumber(imageResult.analysis.original_entropy) }}</div>
@@ -510,7 +510,42 @@
                             <div class="col-6">
                                 <div class="small text-muted text-uppercase fw-bold">Encrypted Entropy</div>
                                 <div class="fs-5 fw-bold text-primary font-mono">{{ formatNumber(imageResult.analysis.encrypted_entropy) }}</div>
-                                <div class="small text-success">Target: ~7.999</div>
+                                <div class="small text-success">Ideal: ~8.0</div>
+                            </div>
+                        </div>
+
+                        <div class="row mt-3 text-center border-bottom pb-3">
+                            <div class="col-6">
+                                <div class="small text-muted text-uppercase fw-bold">NPCR (Pixel Change)</div>
+                                <div class="fs-5 font-mono">{{ formatNumber(imageResult.analysis.npcr) }}%</div>
+                                <div class="small text-success">Ideal: >99.6%</div>
+                            </div>
+                            <div class="col-6">
+                                <div class="small text-muted text-uppercase fw-bold">UACI (Intensity Diff)</div>
+                                <div class="fs-5 font-mono">{{ formatNumber(imageResult.analysis.uaci) }}%</div>
+                                <div class="small text-success">Ideal: ~33.4%</div>
+                            </div>
+                        </div>
+
+                        <div class="row mt-3">
+                            <div class="col-12 mb-2 small text-muted text-uppercase fw-bold text-center">Correlation Coefficients (H / V / D)</div>
+                            
+                            <div class="col-6 text-center border-end">
+                                <div class="small fw-bold text-secondary mb-1">Original</div>
+                                <div class="font-mono small">
+                                    H: {{ formatNumber(imageResult.analysis.corr_orig.Horizontal) }}<br>
+                                    V: {{ formatNumber(imageResult.analysis.corr_orig.Vertical) }}<br>
+                                    D: {{ formatNumber(imageResult.analysis.corr_orig.Diagonal) }}
+                                </div>
+                            </div>
+                            <div class="col-6 text-center">
+                                <div class="small fw-bold text-primary mb-1">Encrypted</div>
+                                <div class="font-mono small">
+                                    H: {{ formatNumber(imageResult.analysis.corr_enc.Horizontal) }}<br>
+                                    V: {{ formatNumber(imageResult.analysis.corr_enc.Vertical) }}<br>
+                                    D: {{ formatNumber(imageResult.analysis.corr_enc.Diagonal) }}
+                                </div>
+                                <div class="small text-success mt-1">Ideal: ~0.0</div>
                             </div>
                         </div>
                     </div>

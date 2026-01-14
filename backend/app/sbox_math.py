@@ -144,11 +144,75 @@ class SBoxMath:
 
     def calculate_npcr(self, img1: np.ndarray, img2: np.ndarray) -> float:
         """Number of Pixels Change Rate"""
+        # Resize img2 to match img1 if shapes differ (Standardization for metric)
         if img1.shape != img2.shape:
-            return 0.0
+            try:
+                from PIL import Image
+                i2 = Image.fromarray(img2)
+                i2 = i2.resize((img1.shape[1], img1.shape[0]), resample=Image.NEAREST)
+                img2 = np.array(i2)
+            except:
+                return 0.0
+
         diff = np.where(img1 != img2, 1, 0)
         npcr = np.sum(diff) / img1.size * 100
         return float(npcr)
+
+    def calculate_uaci(self, img1: np.ndarray, img2: np.ndarray) -> float:
+        """Unified Average Changing Intensity"""
+        if img1.shape != img2.shape:
+            try:
+                from PIL import Image
+                i2 = Image.fromarray(img2)
+                i2 = i2.resize((img1.shape[1], img1.shape[0]), resample=Image.NEAREST)
+                img2 = np.array(i2)
+            except:
+                return 0.0
+        
+        diff = np.abs(img1.astype(int) - img2.astype(int))
+        uaci = np.mean(diff) / 255.0 * 100
+        return float(uaci)
+
+    def calculate_correlation(self, img: np.ndarray) -> Dict[str, float]:
+        """Correlation Coefficient (Horizontal, Vertical, Diagonal)"""
+        # Uses random sampling of 3000 pairs for performance
+        N_SAMPLES = 3000
+        results = {}
+        
+        if len(img.shape) == 3:
+            flat = np.mean(img, axis=2)
+        else:
+            flat = img.astype(float)
+            
+        H, W = flat.shape
+        
+        directions = {
+            'Horizontal': (0, 1),
+            'Vertical': (1, 0),
+            'Diagonal': (1, 1)
+        }
+        
+        for name, (dy, dx) in directions.items():
+            if H <= dy or W <= dx:
+                results[name] = 0.0
+                continue
+            
+            x_vals = []
+            y_vals = []
+            
+            for _ in range(N_SAMPLES):
+                r = np.random.randint(0, H - dy)
+                c = np.random.randint(0, W - dx)
+                x_vals.append(flat[r, c])
+                y_vals.append(flat[r+dy, c+dx])
+                
+            try:
+                corr = np.corrcoef(x_vals, y_vals)[0, 1]
+                results[name] = float(corr) if not np.isnan(corr) else 0.0
+            except:
+                results[name] = 0.0
+                
+        return results
 
     def get_histogram(self, img_array: np.ndarray) -> Dict[str, List[int]]:
         """Calculate histogram for each channel"""
