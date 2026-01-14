@@ -207,7 +207,12 @@ async def encrypt_image(
                 logger.error(f"❌ Histogram error: {e}")
                 raise
             
-            original_array_for_metrics = img_array.copy()
+            # Ensure metrics comparison uses RGB (drop alpha if present)
+            if img.mode == 'RGBA':
+                original_array_for_metrics = np.array(img.convert('RGB'))
+            else:
+                original_array_for_metrics = img_array.copy()
+
             del img_array
             gc.collect()
             
