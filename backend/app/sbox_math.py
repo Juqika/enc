@@ -324,13 +324,21 @@ class SBoxMath:
         return fwht
 
     def calculate_nl(self, sbox):
-        """Nonlinearity"""
+        """Nonlinearity (Strict Definition: Min NL over all non-zero linear combinations)"""
         nl_values = []
-        for i in range(8): # For each output bit function
+        # Standard definition requires checking all 255 non-zero linear combinations of output bits
+        for b in range(1, 256): 
             truth_table = []
             for x in range(256):
-                val = (sbox[x] >> i) & 1
-                truth_table.append(1 if val == 0 else -1)
+                # Calculate dot product parity: <b, S(x)>
+                val = sbox[x] & b
+                # Compute parity of val efficiently
+                parity = 0
+                while val:
+                    parity ^= (val & 1)
+                    val >>= 1
+                
+                truth_table.append(1 if parity == 0 else -1)
             
             fwht = self._walsh_transform(truth_table)
             max_walsh = np.max(np.abs(fwht))
