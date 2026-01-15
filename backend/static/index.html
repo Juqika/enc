@@ -722,9 +722,11 @@
                 const fetchPaperPresets = async () => {
                     try {
                         const res = await axios.get('/paper-presets');
-                        PRESETS.paper2_k44 = { matrix: res.data.K44, constant: res.data.constant, poly: 0x11B };
-                        PRESETS.paper2_k81 = { matrix: res.data.K81, constant: res.data.constant, poly: 0x11B };
-                        PRESETS.paper2_k111 = { matrix: res.data.K111, constant: res.data.constant, poly: 0x11B };
+                        // Use the polynomial provided by the backend (e.g., 0x1F3) instead of hardcoding 0x11B
+                        const paperPoly = res.data.poly || 0x11B;
+                        PRESETS.paper2_k44 = { matrix: res.data.K44, constant: res.data.constant, poly: paperPoly };
+                        PRESETS.paper2_k81 = { matrix: res.data.K81, constant: res.data.constant, poly: paperPoly };
+                        PRESETS.paper2_k111 = { matrix: res.data.K111, constant: res.data.constant, poly: paperPoly };
                     } catch (e) { console.error("Failed to fetch paper presets", e); }
                 };
 
